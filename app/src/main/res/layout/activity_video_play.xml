@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.duan.decoder.VideoPlayActivity">
+
+    <com.duan.decoder.VideoPlayerView
+        android:id="@+id/mVideoPlayerView"
+        android:layout_gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:id="@+id/mTvFilePath"
+        android:layout_gravity="top"
+        android:paddingLeft="10dp"
+        android:gravity="center_vertical|left"
+        android:layout_width="match_parent"
+        android:layout_height="50dp" />
+
+    <LinearLayout
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/mBtnEncoder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Re-Encoder"/>
+
+        <Button
+            android:id="@+id/mBtnPlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:text="Play"/>
+
+        <Button
+            android:id="@+id/mBtnPause"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:text="Pause"/>
+
+    </LinearLayout>
+
+
+
+</FrameLayout>
