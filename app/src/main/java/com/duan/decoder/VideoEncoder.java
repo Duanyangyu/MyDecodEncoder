@@ -29,6 +29,7 @@ public class VideoEncoder {
     private static final int IFRAME_INTERVAL = 30;
 
     private MediaCodec mVideoEncoder;
+    private VideoDecoder mVideoDecoder;
 
     public VideoEncoder() {
         listEncoderType();
@@ -47,7 +48,15 @@ public class VideoEncoder {
         return true;
     }
 
+    public void setVideoDecoder(VideoDecoder mVideoDecoder) {
+        this.mVideoDecoder = mVideoDecoder;
+    }
+
     public void startEncode(){
+        if (mVideoDecoder != null) {
+            mVideoDecoder.play();
+        }
+
         new Thread(){
             @Override
             public void run() {

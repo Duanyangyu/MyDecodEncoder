@@ -9,10 +9,12 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Surface;
 
+import com.duan.Utils.CoordinateUtils;
 import com.duan.Utils.FboHelper;
 import com.duan.Utils.GlUtil;
 import com.duan.Utils.ShaderUtils;
 import com.duan.Utils.TextureRotationUtil;
+import com.duan.drawer.VideoDrawer;
 import com.duan.drawer.WaterMarkerDrawer;
 
 import java.nio.FloatBuffer;
@@ -37,11 +39,12 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
 
     private float mViewWidth;
     private float mViewHeight;
-    private float mVideoWidth;
-    private float mVideoHeight;
+    private VideoDrawer mVideoDrawer;
     private WaterMarkerDrawer mWatermarkerDrawer;
-    private FboHelper mFbo;
     private VideoEncoder mEncoder;
+
+    private FloatBuffer mVertexBuffer;
+    private FloatBuffer mTextureBuffer;
 
     public VideoPlayerView(Context context) {
         this(context,null);
@@ -59,20 +62,32 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
         setRenderer(this);
         setRenderMode(RENDERMODE_WHEN_DIRTY);
 
-        mWatermarkerDrawer = new WaterMarkerDrawer(mContext);
+        mVertexBuffer = GlUtil.createFloatBuffer(CoordinateUtils.VERTEX_COORDINATE_DEFAULT);
+        mTextureBuffer = GlUtil.createFloatBuffer(CoordinateUtils.TEXTURE_COORDINATE_NO_ROTATION);
     }
 
     private void initVideoDecoder(String path){
+
+        if (mDecoder != null) {
+            mDecoder.destroy();
+        }
         mDecoder = new VideoDecoder();
         mDecoder.setDecodeCallback(mDecodeCallback);
         mDecoder.setDataSource(mContext,path);
-        initVertexBufferByVideoSize();
-        initTextureBufferByRotation();
         mTextureId = mDecoder.getTargetTextureId();
+        initTextureBufferByRotation(mDecoder.getVideoRotation());
+        initVertexBufferByVideoSize(mDecoder.getVideoWidth(),mDecoder.getVideoHeight(),mDecoder.getVideoRotation());
+
+
+
+        mVideoDrawer.onInputSizeChanged(mDecoder.getVideoWidth(),mDecoder.getVideoHeight(),mDecoder.getVideoRotation());
+        mWatermarkerDrawer.onInputSizeChanged(mDecoder.getVideoWidth(),mDecoder.getVideoHeight(),mDecoder.getVideoRotation());
     }
 
     private void initVideoEncoder(){
         mEncoder = new VideoEncoder();
+        VideoDecoder decoder = new VideoDecoder(true);
+        mEncoder.setVideoDecoder(decoder);
     }
 
     public void setDataSource(final String path){
@@ -129,9 +144,8 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
         if (mDecoder != null) {
             mDecoder.destroy();
         }
-        if (mFbo != null) {
-            mFbo.close();
-            mFbo = null;
+        if (mVideoDrawer != null) {
+            mVideoDrawer.release();
         }
         if (mWatermarkerDrawer != null) {
             mWatermarkerDrawer.release();
@@ -145,89 +159,19 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
         }
     };
 
-    private void initVertexBufferByVideoSize(){
-        float width = 1.f;
-        float height = 1.f;
 
-        releaseFbo();
-        initFbo((int)mViewWidth,(int)mViewHeight);
-        mWatermarkerDrawer.onSurfaceChanged((int)mViewWidth,(int)mViewHeight);
-
-        if (mDecoder != null) {
-            mVideoWidth = mDecoder.getVideoWidth();
-            mVideoHeight = mDecoder.getVideoHeight();
-        }
-
-        if (mVideoWidth != 0 && mVideoHeight != 0){
-            float realVideoWidth = mVideoWidth;
-            float realVideoHeight = mVideoHeight;
-            int rotation = mDecoder.getVideoRotation();
-            if (rotation == 90 || rotation == 270){
-                realVideoWidth = mVideoHeight;
-                realVideoHeight = mVideoWidth;
-            }
-            float containerRatio = mViewWidth/mViewHeight;
-            float textureRatio = realVideoWidth/realVideoHeight;
-            if (textureRatio > containerRatio){
-                height = containerRatio/textureRatio;
-            }else {
-                width = textureRatio/containerRatio;
-            }
-        }
-
-        Log.e(TAG,"initVertexBufferByVideoSize width="+width+", height="+height);
-        float[] vertexCoords = {
-                -width,-height,
-                width,-height,
-                -width,height,
-                width,height
-        };
-        mVertexCoordsBuffer = GlUtil.createFloatBuffer(vertexCoords);
-    }
-
-    private void initTextureBufferByRotation(){
-        if (mDecoder != null) {
-            int rotation = mDecoder.getVideoRotation();
-            float[] vertex = FRAGMENT_COORDS;
-            switch (rotation){
-                case 0:
-                    vertex = TextureRotationUtil.TEXTURE_NO_ROTATION;
-                    break;
-                case 90:
-                    vertex = TextureRotationUtil.TEXTURE_ROTATED_90;
-                    break;
-                case 180:
-                    vertex = TextureRotationUtil.TEXTURE_ROTATED_180;
-                    break;
-                case 270:
-                    vertex = TextureRotationUtil.TEXTURE_ROTATED_270;
-                    break;
-            }
-            mFragmentCoordsBuffer = GlUtil.createFloatBuffer(vertex);
-        }
-    }
-
-    private void initFbo(int width,int height){
-        mFbo = new FboHelper(width,height);
-        mFbo.createFbo();
-    }
-
-    private void releaseFbo(){
-        if (mFbo != null) {
-            mFbo.close();
-            mFbo = null;
-        }
-    }
-
-    private float[] mMvpMatrix = new float[16];
-    private FloatBuffer mVertexCoordsBuffer;
-    private FloatBuffer mFragmentCoordsBuffer;
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         mProgramIdOES = GlUtil.createProgram(ShaderUtils.VERTEX_SHADER_SIMPLE, ShaderUtils.FRAGMENT_SHADER_OES);
         mProgramId = GlUtil.createProgram(ShaderUtils.VERTEX_SHADER_SIMPLE, ShaderUtils.FRAGMENT_SHADER_SIMPLE);
+
         Matrix.setIdentityM(mMvpMatrix,0);
+
+        mVideoDrawer = new VideoDrawer();
+        mWatermarkerDrawer = new WaterMarkerDrawer(mContext);
+
+        mVideoDrawer.onSurfaceCreate();
         mWatermarkerDrawer.onSurfaceCreate();
     }
 
@@ -237,10 +181,14 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
         Log.e(TAG,"onSurfaceChanged width="+width+", height="+height);
         this.mViewWidth = width;
         this.mViewHeight = height;
-        releaseFbo();
-        initFbo((int)mViewWidth,(int)mViewHeight);
+
+        mVideoDrawer.onSurfaceChanged(width,height);
         mWatermarkerDrawer.onSurfaceChanged(width,height);
     }
+
+    private float[] mMvpMatrix = new float[16];
+    private FloatBuffer mVertexCoordsBuffer;
+    private FloatBuffer mFragmentCoordsBuffer;
 
     @Override
     public void onDrawFrame(GL10 gl) {
@@ -253,33 +201,14 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
             mDecoder.drawFrame();
         }
 
-        GLES20.glClearColor(1.0f,1.0f,1.0f,1.0f);
-        GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT|GLES20.GL_COLOR_BUFFER_BIT);
-
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,mFbo.frameId());
-
-        GLES20.glUseProgram(mProgramIdOES);
-        GLES20.glEnableVertexAttribArray(GLES20.glGetAttribLocation(mProgramIdOES, "a_position"));
-        GLES20.glEnableVertexAttribArray(GLES20.glGetAttribLocation(mProgramIdOES, "a_textCoord"));
-
-        GLES20.glVertexAttribPointer(GLES20.glGetAttribLocation(mProgramIdOES, "a_position"),2,GLES20.GL_FLOAT,false,0,mVertexCoordsBuffer);
-        GLES20.glVertexAttribPointer(GLES20.glGetAttribLocation(mProgramIdOES, "a_textCoord"),2,GLES20.GL_FLOAT,false,0,mFragmentCoordsBuffer);
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(mProgramIdOES, "u_MVPMatrix"),1,false,mMvpMatrix,0);
-
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,mTextureId);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(mProgramIdOES, "u_sampleTexture"),0);
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP,0,4);
-
-        GLES20.glDisableVertexAttribArray(GLES20.glGetAttribLocation(mProgramIdOES, "a_position"));
-        GLES20.glDisableVertexAttribArray(GLES20.glGetAttribLocation(mProgramIdOES, "a_textCoord"));
-
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,0);
-        GLES20.glUseProgram(0);
-
         int targetTextureId = -1;
-        if (mWatermarkerDrawer != null) {
-            mWatermarkerDrawer.drawFrame(mFbo.textureId());
+        if (mVideoDrawer != null) {
+            mVideoDrawer.drawFrame(mTextureId,mVertexCoordsBuffer,mFragmentCoordsBuffer,0);
+            targetTextureId = mVideoDrawer.getTargetTextureId();
+        }
+
+        if (mWatermarkerDrawer != null && targetTextureId != -1) {
+            mWatermarkerDrawer.drawFrame(targetTextureId,mVertexCoordsBuffer,mFragmentCoordsBuffer,0);
             targetTextureId = mWatermarkerDrawer.getTargetTextureId();
         }
 
@@ -289,7 +218,7 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
             GLES20.glEnableVertexAttribArray(GLES20.glGetAttribLocation(mProgramId, "a_position"));
             GLES20.glEnableVertexAttribArray(GLES20.glGetAttribLocation(mProgramId, "a_textCoord"));
 
-            GLES20.glVertexAttribPointer(GLES20.glGetAttribLocation(mProgramId, "a_position"),2,GLES20.GL_FLOAT,false,0,mVertexCoordsBuffer);
+            GLES20.glVertexAttribPointer(GLES20.glGetAttribLocation(mProgramId, "a_position"),2,GLES20.GL_FLOAT,false,0,mVertexBuffer);
             GLES20.glVertexAttribPointer(GLES20.glGetAttribLocation(mProgramId, "a_textCoord"),2,GLES20.GL_FLOAT,false,0,mFragmentCoordsBuffer);
             GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(mProgramId, "u_MVPMatrix"),1,false,mMvpMatrix,0);
 
@@ -304,13 +233,68 @@ public class VideoPlayerView extends GLSurfaceView implements GLSurfaceView.Rend
         }
     }
 
-    private static final float[] VERTEX_COORDS = {
-            -1f,-1f,  1f,-1f,  -1f,1f,  1f,1f
-    };
+    private void initVertexBufferByVideoSize(float inputWidth,float inputHeight,int rotation){
+        float width = 1.f;
+        float height = 1.f;
 
-    private static final float[] FRAGMENT_COORDS = {
-            0f,0f,  1f,0f,  0f,1f,  1f,1f
-    };
+        float realVideoWidth = inputWidth;
+        float realVideoHeight = inputHeight;
+        if (inputWidth != 0 && inputHeight != 0){
+            if (rotation == 90 || rotation == 270){
+                realVideoWidth = inputHeight;
+                realVideoHeight = inputWidth;
+            }
+            float containerRatio = mViewWidth/mViewHeight;
+            float textureRatio = realVideoWidth/realVideoHeight;
+            if (textureRatio > containerRatio){
+                height = containerRatio/textureRatio;
+            }else {
+                width = textureRatio/containerRatio;
+            }
+        }
+
+        float[] vertexCoords = {
+                -width,-height,
+                width,-height,
+                -width,height,
+                width,height
+        };
+
+        Log.e(TAG,"initVertexBufferByVideoSize realVideoWidth="+realVideoWidth+", realVideoHeight="+realVideoHeight);
+        String log = "initVertexBufferByVideoSize array: ";
+        int length = vertexCoords.length;
+        for (int i = 0; i < length; i++) {
+            log += vertexCoords[i]+", ";
+        }
+        Log.e(TAG,log);
+
+        mVertexCoordsBuffer = GlUtil.createFloatBuffer(vertexCoords);
+    }
+
+    private void initTextureBufferByRotation(int rotation){
+        float[] array = CoordinateUtils.TEXTURE_COORDINATE_NO_ROTATION;
+        switch (rotation){
+            case 0:
+                array = CoordinateUtils.TEXTURE_COORDINATE_NO_ROTATION;
+                break;
+            case 90:
+                array = TextureRotationUtil.TEXTURE_ROTATED_90;
+                break;
+            case 180:
+                array = TextureRotationUtil.TEXTURE_ROTATED_180;
+                break;
+            case 270:
+                array = TextureRotationUtil.TEXTURE_ROTATED_270;
+                break;
+        }
+        String log = "initTextureBufferByRotation rotation="+rotation+", array:";
+        int length = array.length;
+        for (int i = 0; i < length; i++) {
+            log += array[i]+", ";
+        }
+        Log.e(TAG,log);
+        mFragmentCoordsBuffer = GlUtil.createFloatBuffer(array);
+    }
 
 
 }

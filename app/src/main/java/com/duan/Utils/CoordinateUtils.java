@@ -13,7 +13,7 @@ public class CoordinateUtils {
     };
 
     public static final float[] TEXTURE_COORDINATE_NO_ROTATION = {
-            0f,1f,  1f,1f,  0f,0f,  1f,0f
+            0f,1f,  1f,1f,  0f,0f,  1f,0f,
     };
 
 }

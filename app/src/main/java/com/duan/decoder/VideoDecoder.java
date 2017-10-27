@@ -38,8 +38,15 @@ public class VideoDecoder {
     private int mVideoWidth;
     private MediaMetadataRetriever mRetriever;
 
+    //是否为重新编码模式
+    private boolean mExport;
+
     public VideoDecoder() {
 
+    }
+
+    public VideoDecoder(boolean mExport) {
+        this.mExport = mExport;
     }
 
     public interface IDecodeCallback{
@@ -184,8 +191,8 @@ public class VideoDecoder {
     }
 
     private void initSurfaceTexture(){
-        mTextureId = GlUtil.createTextureObject();
         Log.e(TAG,"initSurfaceTexture mTextureId="+mTextureId);
+        mTextureId = GlUtil.createTextureObject();
         mSurfaceTexture = new SurfaceTexture(mTextureId);
         mSurfaceTexture.setOnFrameAvailableListener(mSurfaceFrameAvailableListener);
         mOutputSurface = new Surface(mSurfaceTexture);
@@ -220,6 +227,10 @@ public class VideoDecoder {
         if (mOutputSurface != null) {
             mOutputSurface.release();
         }
+        if (mSurfaceTexture != null) {
+            mSurfaceTexture.release();
+        }
+        GlUtil.deleteGlTexture(mTextureId);
 
         if (mVideoSpeedController != null) {
             if (mVideoSpeedController instanceof VideoSpeedController){
@@ -301,10 +312,14 @@ public class VideoDecoder {
                 }
 
                 long presentationTimeUs = bufferInfo.presentationTimeUs;
-                if (mVideoSpeedController != null) {
-                    mVideoSpeedController.onPreRender(presentationTimeUs);
+                //导出模式时，用最大速度解码
+                if (!mExport){
+                    if (mVideoSpeedController != null) {
+                        mVideoSpeedController.onPreRender(presentationTimeUs);
+                    }
                 }
-                mDecoder.releaseOutputBuffer(outputBufferIndex,true);
+                boolean needRender = !mExport;
+                mDecoder.releaseOutputBuffer(outputBufferIndex,needRender);
             }
         }
     }

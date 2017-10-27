@@ -265,4 +265,12 @@ public class GlUtil {
         }
         return textures[0];
     }
+
+    public static void deleteGlTexture(int texture){
+        if(texture <= 0)
+            return;
+        int tex[] = new int[1];
+        tex[0] = texture;
+        GLES20.glDeleteTextures(1, tex, 0);
+    }
 }

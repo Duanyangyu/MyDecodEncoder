@@ -18,6 +18,9 @@ import java.nio.FloatBuffer;
  * Created by duanyy on 2017/10/25.
  */
 
+/**
+ * 绘制水印图片。
+ */
 public class WaterMarkerDrawer extends Drawer{
 
     private static final String TAG = "WaterMarkerDrawer";
@@ -36,11 +39,13 @@ public class WaterMarkerDrawer extends Drawer{
     private FboHelper mFbo;
 
     public WaterMarkerDrawer(Context context) {
+        super();
         this.mContext = context;
         init();
     }
 
-    protected void init(){
+    @Override
+    public void init(){
         mVertexBuffer = GlUtil.createFloatBuffer(CoordinateUtils.VERTEX_COORDINATE_DEFAULT);
         mTextureBuffer = GlUtil.createFloatBuffer(CoordinateUtils.TEXTURE_COORDINATE_NO_ROTATION);
 
@@ -48,8 +53,9 @@ public class WaterMarkerDrawer extends Drawer{
         Matrix.setIdentityM(mMvpMatrix,0);
         Matrix.scaleM(mMvpMatrix,0,0.2f,0.2f,0.2f);
     }
-    
-    private void initProgram(){
+
+    @Override
+    public void initProgram(){
         mProgramId = GlUtil.createProgram(ShaderUtils.VERTEX_SHADER_SIMPLE, ShaderUtils.FRAGMENT_SHADER_SIMPLE);
     }
 
@@ -80,17 +86,31 @@ public class WaterMarkerDrawer extends Drawer{
 
     @Override
     public void onSurfaceCreate() {
-        initProgram();
+        super.onSurfaceCreate();
         initTexture();
     }
 
+    private int mSurfaceWidth;
+    private int mSurfaceHeight;
     @Override
     public void onSurfaceChanged(int width,int height) {
+        this.mSurfaceWidth = width;
+        this.mSurfaceHeight = height;
         releaseFbo();
-        initFbo(width,height);
+        initFbo(mSurfaceWidth,mSurfaceHeight);
     }
-    
+
+    @Override
+    public void onInputSizeChanged(float width, float height,int rotation) {
+
+    }
+
     public void drawFrame(int textureBgId){
+
+    }
+
+    @Override
+    public void drawFrame(int textureId, FloatBuffer vertexBuffer, FloatBuffer textureBuffer, int rotation) {
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,mFbo.frameId());
@@ -104,11 +124,12 @@ public class WaterMarkerDrawer extends Drawer{
 
         GLES20.glEnableVertexAttribArray(a_position);
         GLES20.glEnableVertexAttribArray(a_textCoord);
+
         GLES20.glVertexAttribPointer(a_position,2,GLES20.GL_FLOAT,false,0,mVertexBuffer);
         GLES20.glVertexAttribPointer(a_textCoord,2,GLES20.GL_FLOAT,false,0,mTextureBuffer);
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D,textureBgId);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D,textureId);
         GLES20.glUniformMatrix4fv(u_mvpMatrix,1,false,mIdentyMatrix,0);
         GLES20.glUniform1i(sampleTexture,1);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP,0,4);
